@@ -47,13 +47,13 @@ public class Init : MonoBehaviour
         // If the player is already signed in, we load the main menu
         if (AuthenticationService.Instance.IsSignedIn)
         {
-            string playerName = PlayerPrefs.GetString("PlayerName");
-            if (playerName == "")
-            {
-                // If the player name is empty, we set it to a default value
-                playerName = "Player" + AuthenticationService.Instance.PlayerId;
-                PlayerPrefs.SetString("PlayerName", playerName);
-            }
+            // string playerName = PlayerPrefs.GetString("PlayerName");
+            // if (playerName == "")
+            // {
+            //     // If the player name is empty, we set it to a default value
+            //     playerName = "Player" + AuthenticationService.Instance.PlayerId;
+            //     PlayerPrefs.SetString("PlayerName", playerName);
+            // }
 
             SceneManager.LoadSceneAsync("Main Menu");
         }

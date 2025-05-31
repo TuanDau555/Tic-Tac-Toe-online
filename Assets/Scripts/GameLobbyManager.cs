@@ -13,6 +13,7 @@ public class GameLobbyManager : MonoBehaviour
     [SerializeField] private Button refreshLobbiesBtn;
     [SerializeField] private GameObject roomInfoPrefab;
     [SerializeField] private GameObject roomInfoContent;
+    [SerializeField] private TMP_InputField playerNameIF;
 
     [Space(10)]
     [Header("Create Room Panel")]
@@ -25,21 +26,30 @@ public class GameLobbyManager : MonoBehaviour
     [SerializeField] private GameObject roomPanel;
     [SerializeField] private TextMeshProUGUI roomNameText;
     [SerializeField] private TextMeshProUGUI roomCodeText;
+    [SerializeField] private GameObject playerInfoPrefab;
+    [SerializeField] private GameObject playerInfoContent;
 
-
+    private CreateLobbyOptions createOptions;
+    private JoinLobbyByCodeOptions joinOptions;
     private Lobby currentRoom;
     private float heartbeatTimer = 15f;
+    private float roomUpdateTimer = 1.5f;
+    private string roomName;
+    private int maxPlayers = 2; // max player alway 2
+
     #endregion
 
     #region Main Method
     void Start()
     {
         ButtonClickListener();
+        PlayerName();
     }
 
     void Update()
     {
         HandleRoomHeartbeat();
+        HandleRoomUpadate();
     }
 
     #endregion
@@ -50,16 +60,15 @@ public class GameLobbyManager : MonoBehaviour
     {
         try
         {
-            string lobbyName = roomNameIF.text;
-            int maxPlayers = 2; // max player alway 2
-
+            roomName = roomNameIF.text;
+            CreateLobbyOptions();
             // Check if the lobby name is empty
 
             // Check if the lobby name is current exist
 
             // Create a lobby with the specified name and max players
             // after the lobby is created, the host will enter the room
-            currentRoom = await LobbyService.Instance.CreateLobbyAsync(lobbyName, maxPlayers);
+            currentRoom = await LobbyService.Instance.CreateLobbyAsync(roomName, maxPlayers, createOptions);
             EnterRoom();
             Debug.Log("Lobby created: " + currentRoom.Name + " with ID: " + currentRoom.Id + " and Max Players: " + currentRoom.MaxPlayers);
         }
@@ -76,13 +85,16 @@ public class GameLobbyManager : MonoBehaviour
     {
         roomNameText.text = currentRoom.Name;
         roomCodeText.text = currentRoom.LobbyCode;
+
+        VisualizePlayerInRoom();
     }
 
     private async void JoinRoom(string roomID)
     {
         try
         {
-            currentRoom = await LobbyService.Instance.JoinLobbyByCodeAsync(roomID);
+            JoinLobbyByCodeOptions();
+            currentRoom = await LobbyService.Instance.JoinLobbyByCodeAsync(roomID, joinOptions);
             EnterRoom();
             Debug.Log("Player in the room: " + currentRoom.Players.Count);
         }
@@ -119,6 +131,8 @@ public class GameLobbyManager : MonoBehaviour
             // Because the room info prefab is a child of the room info content, it will be displayed in the room info content
             var roomDetailsText = newRoomInfo.GetComponentsInChildren<TextMeshProUGUI>();
             // ...and set the room details text (name and player count)
+            // first text is the room name
+            // second text is the player count
             roomDetailsText[0].text = room.Name;
             roomDetailsText[1].text = (room.MaxPlayers - room.AvailableSlots).ToString() + " / " + room.MaxPlayers.ToString();
 
@@ -126,6 +140,58 @@ public class GameLobbyManager : MonoBehaviour
             // We use the room ID to join the room
             newRoomInfo.GetComponentInChildren<Button>().onClick.AddListener(() => JoinRoom(room.Id));
         }
+    }
+
+    private void VisualizePlayerInRoom()
+    {
+        for(int i = 0; i < playerInfoContent.transform.childCount; i++)
+        {
+            // Destroy all the previous player info UI elements
+            Destroy(playerInfoContent.transform.GetChild(i).gameObject);
+        }
+
+        foreach (Player player in currentRoom.Players)
+        {
+            // Create a new player info UI element for each player...
+            GameObject newPlayerInfo = Instantiate(playerInfoPrefab, playerInfoContent.transform);
+            // ...and set its parent to the player info content
+            // Because the player info prefab is a child of the player info content, it will be displayed in the player info content
+            var playerDetailsText = newPlayerInfo.GetComponentInChildren<TextMeshProUGUI>();
+            // ...and set the player details text (name)
+            playerDetailsText.text = player.Data["Name"].Value;
+        }
+    }
+
+    #endregion
+
+    #region Player Info
+
+    private void PlayerName()
+    {
+        playerNameIF.onValueChanged.AddListener(delegate
+        {
+            PlayerPrefs.SetString("PlayerName", playerNameIF.text);
+        });
+        playerNameIF.text = PlayerPrefs.GetString("PlayerName");
+    }
+
+    private Player GetPlayerInfo()
+    {
+        string playerName = PlayerPrefs.GetString("PlayerName");
+        if (playerName == "" && playerName == null)
+        {
+            playerName = "Player" + UnityEngine.Random.Range(1, 99).ToString();
+            Debug.Log("Player name is empty, setting to default: " + playerName);
+        }
+
+        Player player = new Player
+        {
+            Data = new Dictionary<string, PlayerDataObject>
+            {
+                { "Name", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Member, playerName) }
+            }
+        };
+        return player;
     }
 
     #endregion
@@ -139,6 +205,22 @@ public class GameLobbyManager : MonoBehaviour
         createRoomBtn.onClick.AddListener(CreateRoom);
         refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
 
+    }
+
+    private void CreateLobbyOptions()
+    {
+        createOptions = new CreateLobbyOptions
+        {
+            Player = GetPlayerInfo()
+        };
+    }
+
+    private void JoinLobbyByCodeOptions()
+    {
+        joinOptions = new JoinLobbyByCodeOptions
+        {
+            Player = GetPlayerInfo()
+        };
     }
     
     // Only the host can send heartbeats to keep the lobby alive
@@ -154,6 +236,27 @@ public class GameLobbyManager : MonoBehaviour
                 try
                 {
                     await LobbyService.Instance.SendHeartbeatPingAsync(currentRoom.Id);
+                }
+                catch (LobbyServiceException e)
+                {
+                    Debug.Log(e);
+                }
+            }
+        }
+    }
+
+    private async void HandleRoomUpadate()
+    {
+        if (currentRoom != null)
+        {    
+            roomUpdateTimer -= Time.deltaTime;
+            if (roomUpdateTimer <= 0f)
+            {
+                roomUpdateTimer = 1.5f;
+                try
+                {
+                    currentRoom = await LobbyService.Instance.GetLobbyAsync(currentRoom.Id);
+                    VisualizePlayerInRoom();
                 }
                 catch (LobbyServiceException e)
                 {

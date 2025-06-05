@@ -10,6 +10,7 @@ public class GameLobbyManager : MonoBehaviour
 {
     #region Variables
     [Header("Lobby Panel")]
+    [SerializeField] private GameObject lobbyPanel;
     [SerializeField] private Button refreshLobbiesBtn;
     [SerializeField] private GameObject roomInfoPrefab;
     [SerializeField] private GameObject roomInfoContent;
@@ -30,7 +31,7 @@ public class GameLobbyManager : MonoBehaviour
     [SerializeField] private GameObject playerInfoContent;
 
     private CreateLobbyOptions createOptions;
-    private JoinLobbyByCodeOptions joinOptions;
+    private JoinLobbyByIdOptions joinOptions;
     private Lobby currentRoom;
     private float heartbeatTimer = 15f;
     private float roomUpdateTimer = 1.5f;
@@ -85,6 +86,10 @@ public class GameLobbyManager : MonoBehaviour
     {
         roomNameText.text = currentRoom.Name;
         roomCodeText.text = currentRoom.LobbyCode;
+        
+        lobbyPanel.SetActive(false);
+        roomPanel.SetActive(true);
+        
 
         VisualizePlayerInRoom();
     }
@@ -93,8 +98,8 @@ public class GameLobbyManager : MonoBehaviour
     {
         try
         {
-            JoinLobbyByCodeOptions();
-            currentRoom = await LobbyService.Instance.JoinLobbyByCodeAsync(roomID, joinOptions);
+            JoinLobbyByIDOptions();
+            currentRoom = await LobbyService.Instance.JoinLobbyByIdAsync(roomID, joinOptions);
             EnterRoom();
             Debug.Log("Player in the room: " + currentRoom.Players.Count);
         }
@@ -215,9 +220,9 @@ public class GameLobbyManager : MonoBehaviour
         };
     }
 
-    private void JoinLobbyByCodeOptions()
+    private void JoinLobbyByIDOptions()
     {
-        joinOptions = new JoinLobbyByCodeOptions
+        joinOptions = new JoinLobbyByIdOptions
         {
             Player = GetPlayerInfo()
         };

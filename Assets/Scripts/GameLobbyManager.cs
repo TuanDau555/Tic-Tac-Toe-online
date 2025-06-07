@@ -29,12 +29,14 @@ public class GameLobbyManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI roomCodeText;
     [SerializeField] private GameObject playerInfoPrefab;
     [SerializeField] private GameObject playerInfoContent;
+    [SerializeField] private Button leaveRoomBtn;
+    [SerializeField] private Button startGameBtn;
 
     private CreateLobbyOptions createOptions;
     private JoinLobbyByIdOptions joinOptions;
     private Lobby currentRoom;
     private float heartbeatTimer = 15f;
-    private float roomUpdateTimer = 2f;
+    private float roomUpdateTimer = 2.5f;
     private string roomName;
     private int maxPlayers = 2; // max player alway 2
 
@@ -55,7 +57,7 @@ public class GameLobbyManager : MonoBehaviour
 
     #endregion
 
-    #region At Lobby Panel
+    #region Room Management
 
     private async void CreateRoom()
     {
@@ -94,6 +96,24 @@ public class GameLobbyManager : MonoBehaviour
         VisualizePlayerInRoom();
     }
 
+    private void ExitRoom()
+    {
+        lobbyPanel.SetActive(true);
+        roomPanel.SetActive(false);
+
+        // Reset the room name and code text to default values
+        // This is to clear the room information when the player exits the room
+        roomNameText.text = "";
+        roomCodeText.text = "";
+        currentRoom = null;
+
+        for (int i = 0; i < playerInfoContent.transform.childCount; i++)
+        {
+            // Destroy all the previous player info UI elements
+            Destroy(playerInfoContent.transform.GetChild(i).gameObject);
+        }
+    }
+
     private async void JoinRoom(string roomID)
     {
         try
@@ -110,6 +130,55 @@ public class GameLobbyManager : MonoBehaviour
 
     }
 
+    private async void LeaveRoom()
+    {
+        try
+        {
+            // If the player is the host, we need to find the next host before leaving the room
+            // If the player is not the host, we can leave the room directly
+            if (IsHost() && currentRoom.Players.Count > 1)
+            {
+                string nextHostId = GetNextHostId();
+                if (string.IsNullOrEmpty(nextHostId))
+                {
+                    await LobbyService.Instance.UpdateLobbyAsync(currentRoom.Id, new UpdateLobbyOptions
+                    {
+                        HostId = nextHostId // If no next host, the current player will be the host
+                    });
+
+                    Debug.Log("New host set to: " + nextHostId);
+                }
+            }
+
+            // Remove the player from the room
+            await LobbyService.Instance.RemovePlayerAsync(currentRoom.Id, AuthenticationService.Instance.PlayerId);
+            ExitRoom();
+        }
+        catch (LobbyServiceException e)
+        {
+            Debug.Log(e);
+        }
+    }
+
+    private async void KickPlayer(string playerId)
+    {
+        try
+        {
+            if (IsHost())
+            {
+                await LobbyService.Instance.RemovePlayerAsync(currentRoom.Id, playerId);
+                Debug.Log("Player with ID: " + playerId + " has been kicked from the room.");
+            }
+        }
+        catch (LobbyServiceException e)
+        {
+            Debug.Log(e);
+        }
+    }
+
+    #endregion
+
+    #region Room UI Visualization
     private async void ListOfRooms()
     {
         try
@@ -149,25 +218,45 @@ public class GameLobbyManager : MonoBehaviour
 
     private void VisualizePlayerInRoom()
     {
-        for(int i = 0; i < playerInfoContent.transform.childCount; i++)
+        for (int i = 0; i < playerInfoContent.transform.childCount; i++)
         {
             // Destroy all the previous player info UI elements
             Destroy(playerInfoContent.transform.GetChild(i).gameObject);
         }
 
-        foreach (Player player in currentRoom.Players)
+        // If the player is not in the room, we don't visualize the player info
+        if (IsInRoom())
         {
-            // Create a new player info UI element for each player...
-            GameObject newPlayerInfo = Instantiate(playerInfoPrefab, playerInfoContent.transform);
-            // ...and set its parent to the player info content
-            // Because the player info prefab is a child of the player info content, it will be displayed in the player info content
-            var playerDetailsText = newPlayerInfo.GetComponentInChildren<TextMeshProUGUI>();
-            // ...and set the player details text (name)
-            playerDetailsText.text = player.Data["Name"].Value;
+            // If the player is in the room, we visualize the player info
+            foreach (Player player in currentRoom.Players)
+            {
+                // Create a new player info UI element for each player...
+                GameObject newPlayerInfo = Instantiate(playerInfoPrefab, playerInfoContent.transform);
+                // ...and set its parent to the player info content
+                // Because the player info prefab is a child of the player info content, it will be displayed in the player info content
+                var playerDetailsText = newPlayerInfo.GetComponentInChildren<TextMeshProUGUI>();
+                // ...and set the player details text (name)
+                playerDetailsText.text = player.Data["Name"].Value;
+
+                if (IsHost() && player.Id != AuthenticationService.Instance.PlayerId)
+                {
+                    // If the player is the host, we add a kick button to the player info UI element
+                    // This is to allow the host to kick other players from the room
+                    // We need to include inactive children to find the button
+                    // Because the button is not active until the host is in the room 
+                    Button kickButton = newPlayerInfo.GetComponentInChildren<Button>(true);
+                    kickButton.onClick.AddListener(() => KickPlayer(player.Id));
+                    kickButton.gameObject.SetActive(true);
+                }
+            }
+        }
+        else
+        {
+            ExitRoom();
         }
     }
-
     #endregion
+
 
     #region Player Info
 
@@ -209,7 +298,7 @@ public class GameLobbyManager : MonoBehaviour
     {
         createRoomBtn.onClick.AddListener(CreateRoom);
         refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
-
+        leaveRoomBtn.onClick.AddListener(LeaveRoom);
     }
 
     private void CreateLobbyOptions()
@@ -261,8 +350,14 @@ public class GameLobbyManager : MonoBehaviour
                 roomUpdateTimer = 2f;
                 try
                 {
-                    currentRoom = await LobbyService.Instance.GetLobbyAsync(currentRoom.Id);
-                    VisualizePlayerInRoom();
+                    // If the player is in the room, we update the room information
+                    // This is to keep the room information up to date
+                    // And prevent the host sending heartbeats while they are not in the room
+                    if (IsInRoom())
+                    {
+                        currentRoom = await LobbyService.Instance.GetLobbyAsync(currentRoom.Id);
+                        VisualizePlayerInRoom();
+                    }
                 }
                 catch (LobbyServiceException e)
                 {
@@ -270,6 +365,35 @@ public class GameLobbyManager : MonoBehaviour
                 }
             }
         }
+    }
+
+    // Check if the player is already in the room
+    // This is used to prevent the player from joining the room again if they are already in it
+    private bool IsInRoom()
+    {
+        foreach (Player player in currentRoom.Players)
+        {
+            if (player.Id == AuthenticationService.Instance.PlayerId)
+            {
+                return true; // Player is already in the room
+            }
+        }
+
+        return false; // Player is not in the room
+    }
+
+    private string GetNextHostId()
+    {
+        // If the current host leaves the room, we need to find the next host
+        // We can do this by checking the player list and returning the first player that is not the current host
+        foreach (Player player in currentRoom.Players)
+        {
+            if (player.Id != AuthenticationService.Instance.PlayerId)
+            {
+                return player.Id; // Return the next host ID
+            }
+        }
+        return null; // No next host found
     }
 
     // Only the host can perform certain actions like sending heartbeats

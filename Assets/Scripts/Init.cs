@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 
 public class Init : MonoBehaviour
 {
+    private string playerId;
     async void Start()
     {
         // Initialize the Unity Services SDK (required for Authentication)
@@ -53,8 +54,9 @@ public class Init : MonoBehaviour
 
     private void OnSignedIn()
     {
+        playerId = AuthenticationService.Instance.PlayerId;
         Debug.Log("Token: " + AuthenticationService.Instance.AccessToken);
-        Debug.Log("Player ID: " + AuthenticationService.Instance.PlayerId);
+        Debug.Log("Player ID: " + playerId);
     }
     
 }

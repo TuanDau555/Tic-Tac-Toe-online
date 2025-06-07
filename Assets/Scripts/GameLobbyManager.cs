@@ -34,7 +34,7 @@ public class GameLobbyManager : MonoBehaviour
     private JoinLobbyByIdOptions joinOptions;
     private Lobby currentRoom;
     private float heartbeatTimer = 15f;
-    private float roomUpdateTimer = 1.5f;
+    private float roomUpdateTimer = 2f;
     private string roomName;
     private int maxPlayers = 2; // max player alway 2
 
@@ -250,14 +250,15 @@ public class GameLobbyManager : MonoBehaviour
         }
     }
 
+    // This method is used to update the room information periodically
     private async void HandleRoomUpadate()
     {
         if (currentRoom != null)
-        {    
+        {
             roomUpdateTimer -= Time.deltaTime;
             if (roomUpdateTimer <= 0f)
             {
-                roomUpdateTimer = 1.5f;
+                roomUpdateTimer = 2f;
                 try
                 {
                     currentRoom = await LobbyService.Instance.GetLobbyAsync(currentRoom.Id);

@@ -212,6 +212,7 @@ public class GameLobbyManager : MonoBehaviour
 
             // ưhen the player clicks on the room info, it will join the room
             // We use the room ID to join the room
+            newRoomInfo.GetComponentInChildren<Button>().onClick.RemoveAllListeners();
             newRoomInfo.GetComponentInChildren<Button>().onClick.AddListener(() => JoinRoom(room.Id));
         }
     }
@@ -245,6 +246,7 @@ public class GameLobbyManager : MonoBehaviour
                     // We need to include inactive children to find the button
                     // Because the button is not active until the host is in the room 
                     Button kickButton = newPlayerInfo.GetComponentInChildren<Button>(true);
+                    kickButton.onClick.RemoveAllListeners(); // prevent click multiple time
                     kickButton.onClick.AddListener(() => KickPlayer(player.Id));
                     kickButton.gameObject.SetActive(true);
                 }
@@ -294,10 +296,16 @@ public class GameLobbyManager : MonoBehaviour
 
     // Call when a button click
     // We could use Unity's UI Button component to call this method also
+    // Remove All the Listener to prevent click the button multiple time
     private void ButtonClickListener()
     {
+        createRoomBtn.onClick.RemoveAllListeners();
         createRoomBtn.onClick.AddListener(CreateRoom);
+
+        refreshLobbiesBtn.onClick.RemoveAllListeners();
         refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
+
+        leaveRoomBtn.onClick.RemoveAllListeners();
         leaveRoomBtn.onClick.AddListener(LeaveRoom);
     }
 

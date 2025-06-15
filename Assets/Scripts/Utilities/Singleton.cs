@@ -18,13 +18,11 @@ public class Singleton<T> : MonoBehaviour where T : Component
         if (Instance == null)
         {
             Instance = this as T;
-            Debug.Log("There are " + Instance);
         }
 
         else
         {
             Destroy(gameObject);
-            Debug.Log("Destroy");
         }
     }
 }

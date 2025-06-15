@@ -5,6 +5,7 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Lobbies;
 using Unity.Services.Authentication;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 public class GameLobbyManager : MonoBehaviour
 {
@@ -45,7 +46,6 @@ public class GameLobbyManager : MonoBehaviour
     #region Main Method
     void Start()
     {
-        ButtonClickListener();
         PlayerName();
     }
 
@@ -53,6 +53,21 @@ public class GameLobbyManager : MonoBehaviour
     {
         HandleRoomHeartbeat();
         HandleRoomUpadate();
+    }
+
+    void OnEnable()
+    {
+        createRoomBtn.onClick.AddListener(CreateRoom);
+        refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
+        leaveRoomBtn.onClick.AddListener(LeaveRoom);
+        
+    }
+    void OnDisable()
+    {
+        // Prevent multiple click
+        createRoomBtn.onClick.RemoveAllListeners();
+        refreshLobbiesBtn.onClick.RemoveAllListeners();
+        leaveRoomBtn.onClick.RemoveAllListeners();        
     }
 
     #endregion
@@ -176,6 +191,31 @@ public class GameLobbyManager : MonoBehaviour
         }
     }
 
+    // When the host click Start Button 
+    // We need to upate the value of the data to true...
+    private async void StartGame()
+    {
+        if (currentRoom != null && IsHost())
+        {
+            try
+            {
+                UpdateLobbyOptions updateLobbyOptions = new UpdateLobbyOptions
+                {
+                    Data = new Dictionary<string, DataObject>
+                    {
+                        {"IsGameStarted", new DataObject(DataObject.VisibilityOptions.Member, "true")}
+                    }
+                };
+                // ...and update the current room
+                currentRoom = await LobbyService.Instance.UpdateLobbyAsync(currentRoom.Id, updateLobbyOptions);
+            }
+            catch (LobbyServiceException e)
+            {
+                Debug.Log(e);
+            }
+        }
+    }
+
     #endregion
 
     #region Room UI Visualization
@@ -294,26 +334,17 @@ public class GameLobbyManager : MonoBehaviour
 
     #region Other Controller
 
-    // Call when a button click
-    // We could use Unity's UI Button component to call this method also
-    // Remove All the Listener to prevent click the button multiple time
-    private void ButtonClickListener()
-    {
-        createRoomBtn.onClick.RemoveAllListeners();
-        createRoomBtn.onClick.AddListener(CreateRoom);
-
-        refreshLobbiesBtn.onClick.RemoveAllListeners();
-        refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
-
-        leaveRoomBtn.onClick.RemoveAllListeners();
-        leaveRoomBtn.onClick.AddListener(LeaveRoom);
-    }
-
     private void CreateLobbyOptions()
     {
         createOptions = new CreateLobbyOptions
         {
-            Player = GetPlayerInfo()
+            Player = GetPlayerInfo(),
+            Data = new Dictionary<string, DataObject>
+            {
+                // A custom data to check Game is started yet
+                // At first is not started so we set it false
+                { "IsGameStarted", new DataObject(DataObject.VisibilityOptions.Member, "false")}
+            }
         };
     }
 

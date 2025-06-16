@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -17,11 +14,8 @@ using UnityEngine;
 /// </remark> 
 public class GameRelayManager : SingletonPersistent<GameRelayManager>
 {
-    private string joinCode;
-    private string ip;
-    private int port;
-    private byte[] connectionData;
-    private System.Guid allocationId;
+    private string m_joinCode;
+
     public async Task<string> CreateRelay()
     {
         try
@@ -29,18 +23,19 @@ public class GameRelayManager : SingletonPersistent<GameRelayManager>
             // Because max player is alway 2 so...
             // ...We just need 1 connection to the room
             Allocation allocation = await RelayService.Instance.CreateAllocationAsync(1);
-            joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+            m_joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
             // we use dtls protocol 
             RelayServerData relayServerData = new RelayServerData(allocation, "dtls");
 
             NetworkManager.Singleton.GetComponent<UnityTransport>().SetRelayServerData(relayServerData);
 
-            // After the host click Start game
-            // We create allocation and start host
+            // After the host click Start game or after we create room...
+            // ...we create allocation and start host
             NetworkManager.Singleton.StartHost();
 
-            return joinCode;
+            Debug.Log("Allocation created: " + allocation + " join Code: " + m_joinCode);
+            return m_joinCode;
         }
         catch (RelayServiceException e)
         {
@@ -49,15 +44,22 @@ public class GameRelayManager : SingletonPersistent<GameRelayManager>
         }
     }
 
-    public async void JoinRelay()
+    /// <summary>
+    /// It just simple Player Join Relay which is created by the host
+    /// </summary>
+    /// <returns></returns>
+    public async void JoinRelay(string joinCode)
     {
         try
         {
+            m_joinCode = joinCode;
             JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
 
             RelayServerData relayServerData = new RelayServerData(joinAllocation, "dtls");
 
             NetworkManager.Singleton.StartClient();
+
+            Debug.Log("Join Relay: " + joinAllocation);
         }
         catch (RelayServiceException e)
         {

@@ -6,6 +6,7 @@ using Unity.Services.Lobbies;
 using Unity.Services.Authentication;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using UnityEngine.SceneManagement;
 
 public class GameLobbyManager : MonoBehaviour
 {
@@ -88,6 +89,9 @@ public class GameLobbyManager : MonoBehaviour
             // after the lobby is created, the host will enter the room
             currentRoom = await LobbyService.Instance.CreateLobbyAsync(roomName, maxPlayers, createOptions);
             EnterRoom();
+            // After we create Room we want to create an allocation also...
+            // ...So that the player could join on difference computer, wifi, etc. 
+            //string relayCode = await GameRelayManager.Instance.CreateRelay();
             Debug.Log("Lobby created: " + currentRoom.Name + " with ID: " + currentRoom.Id + " and Max Players: " + currentRoom.MaxPlayers);
         }
         // Handle the case where the lobby creation fails
@@ -136,6 +140,10 @@ public class GameLobbyManager : MonoBehaviour
             JoinLobbyByIDOptions();
             currentRoom = await LobbyService.Instance.JoinLobbyByIdAsync(roomID, joinOptions);
             EnterRoom();
+            // if (!IsHost()) // Room Host already join Relay
+            // {
+            //     GameRelayManager.Instance.JoinRelay(createOptions.Data["IsGameStarted"].Value);
+            // }
             Debug.Log("Player in the room: " + currentRoom.Players.Count);
         }
         catch (LobbyServiceException e)
@@ -208,6 +216,8 @@ public class GameLobbyManager : MonoBehaviour
                 };
                 // ...and update the current room
                 currentRoom = await LobbyService.Instance.UpdateLobbyAsync(currentRoom.Id, updateLobbyOptions);
+                // Then both go to the game
+                //SceneManager.LoadSceneAsync();
             }
             catch (LobbyServiceException e)
             {

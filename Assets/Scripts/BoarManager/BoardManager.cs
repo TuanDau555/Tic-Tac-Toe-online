@@ -15,7 +15,6 @@ public class BoardManager : SingletonNetwork<BoardManager>
     [SerializeField] private Sprite XSprite;
     [SerializeField] private Sprite OSprite;
 
-    private Image btnImage;
     #endregion
 
     #region Main Methods
@@ -42,7 +41,6 @@ public class BoardManager : SingletonNetwork<BoardManager>
     /// <param name="column">Column's position of button</param>
     public void SetPlayerSpace(int row, int column)
     {
-        if (!IsOwner) return; // only local can interact with their button
 
         // 1 represents player space, 2 represents AI space
         // this parameter used to track easier which space is occupied by whom
@@ -53,7 +51,7 @@ public class BoardManager : SingletonNetwork<BoardManager>
     }
 
 
-    [Rpc(SendTo.Server)]
+    [ServerRpc(RequireOwnership = false)]
     public void SetPlayerSpaceServerRpc(int row, int column, int currentPlayer)
     {
         // Do not override availble space
@@ -74,6 +72,7 @@ public class BoardManager : SingletonNetwork<BoardManager>
     [ClientRpc]
     private void SetPlayerSpaceClientRpc(int row, int column, int currentPlayer)
     {
+        Debug.Log($"[ClientRpc] SetPlayerSpaceClientRpc: {row}, {column}, player: {currentPlayer}");
         Sprite sprite = (currentPlayer == 1) ? XSprite : OSprite;
 
         foreach(Cell cell in FindObjectsOfType<Cell>())

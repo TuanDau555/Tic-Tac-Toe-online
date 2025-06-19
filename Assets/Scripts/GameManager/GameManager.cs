@@ -32,7 +32,8 @@ public class GameManager : SingletonNetwork<GameManager>
     {
         if (CheckForWinner(row, column, player))
         {
-            Debug.Log((player == 1 ? "Player X" : "Player 0") + " win!");
+            AnnounceWinnerClientRpc(player);
+            UpdateTurnStateClientRpc(TurnState.GameOver);
         }
 
         else
@@ -43,6 +44,7 @@ public class GameManager : SingletonNetwork<GameManager>
             UpdateTurnStateClientRpc(nextTurn);
         }
     }
+
 
     /// <summary>
     /// Update state to all client
@@ -58,12 +60,34 @@ public class GameManager : SingletonNetwork<GameManager>
         currentTurnState = newState;
     }
 
+    [ClientRpc]
+    private void AnnounceWinnerClientRpc(int winnerPlayerId)
+    {
+        Debug.Log("Is Found winner");
+        string resultText;
+        // Get player Id of current client
+        // LocalClientId alway set to 0 for Host
+        // we set it to 1 or 2 for easily checking
+        int localPlayerId = NetworkManager.Singleton.LocalClientId == 0 ? 1 : 2;
+
+        if (localPlayerId == winnerPlayerId)
+        {
+            resultText = "You Win!";
+            GameOverUI.Instance.ShowGameOver(resultText, Color.green);
+        }
+        else
+        {
+            resultText = "You Lose!";
+            GameOverUI.Instance.ShowGameOver(resultText, Color.red);
+        }
+    }
+
     public bool IsMyTurn()
     {
         // if is host only host play
         // else only client play 
         return (currentTurnState == TurnState.XTurn && IsServer) ||
-               (currentTurnState == TurnState.OTurn && !IsServer); 
+               (currentTurnState == TurnState.OTurn && !IsServer);
     }
     #endregion
 
@@ -137,7 +161,7 @@ public class GameManager : SingletonNetwork<GameManager>
                 break; // Out of bounds check
 
             // Check if the cells at (newRow, newColumn) is belonging to Player 1 or 2
-            // Eg: (!,2) currentPlayer == 1 -> count = 1 for Player 1 at cell (1,2) 
+            // Eg: (1,2) currentPlayer == 1 -> count = 1 for Player 1 at cell (1,2) 
             if (BoardManager.Instance.boardSpaces[newRow, newColumn] == player)
                 count++;
             else

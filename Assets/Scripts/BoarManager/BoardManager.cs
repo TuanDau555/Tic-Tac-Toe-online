@@ -42,19 +42,30 @@ public class BoardManager : SingletonNetwork<BoardManager>
     public void SetPlayerSpace(int row, int column)
     {
 
-        // 1 represents player space, 2 represents AI space
-        // this parameter used to track easier which space is occupied by whom
+        // 1 represents X player space, 2 represents O space
+        // this parameter used to track easier which space is occupied by who
         int currentPlayer = GameManager.Instance.currentTurnState == TurnState.XTurn ? 1 : 2;
 
         // Send player's request to the server
         SetPlayerSpaceServerRpc(row, column, currentPlayer);
     }
 
-
+    /// <summary>
+    /// Sets the player's space on the server.
+    /// </summary>
+    /// <remarks>
+    /// This method is called when a player clicks on a cell.
+    /// It checks if the cell is already occupied. If not, it updates the board state
+    /// One Note that this method don't overload Transform, Button, etc. 
+    /// </remarks>
+    /// <param name="row">Row's position of button</param>
+    /// <param name="column">Column's position of button</param>
+    /// <param name="currentPlayer">The player which is playing</param> 
+    /// <summary>
     [ServerRpc(RequireOwnership = false)]
     public void SetPlayerSpaceServerRpc(int row, int column, int currentPlayer)
     {
-        // Do not override availble space
+        // Do not override available space
         if (boardSpaces[row, column] != 0)
         {
             Debug.Log("This cell is already click");
@@ -69,13 +80,25 @@ public class BoardManager : SingletonNetwork<BoardManager>
     }
     #endregion
 
+    /// <summary>
+    /// Sets the player's space on all clients.
+    /// <remarks>
+    /// This method is called by the server to update all clients
+    /// It find the cell at the given row and column...
+    /// ...Then sets its sprite to the current player (X or O)
+    /// This ensure that all clients see the same move on their game boards
+    /// </remarks>
+    /// <param name="row">Row's position of button</param>
+    /// <param name="column">Column's position of button</param>
+    /// <param name="currentPlayer">The player which is playing</param> 
+    /// </summary>
     [ClientRpc]
     private void SetPlayerSpaceClientRpc(int row, int column, int currentPlayer)
     {
         Debug.Log($"[ClientRpc] SetPlayerSpaceClientRpc: {row}, {column}, player: {currentPlayer}");
         Sprite sprite = (currentPlayer == 1) ? XSprite : OSprite;
 
-        foreach(Cell cell in FindObjectsOfType<Cell>())
+        foreach (Cell cell in FindObjectsOfType<Cell>())
         {
             if (cell.row == row && cell.column == column)
             {

@@ -27,7 +27,7 @@
 
         public void OnClick()
         {
-            if (BoardManager.Instance != null)
+            if (BoardManager.Instance != null && GameManager.Instance.IsMyTurn())
             {
                 BoardManager.Instance.SetPlayerSpace(row, column);
                 Debug.Log($"Cell clicked at row: {row}, column: {column}");

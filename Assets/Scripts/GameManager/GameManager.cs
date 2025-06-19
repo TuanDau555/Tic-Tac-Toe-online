@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 
@@ -8,7 +9,7 @@ public enum TurnState
     GameOver
 }
 
-public class GameManager : Singleton<GameManager>
+public class GameManager : SingletonNetwork<GameManager>
 {
     public TurnState currentTurnState;
 
@@ -37,13 +38,36 @@ public class GameManager : Singleton<GameManager>
         else
         {
             Debug.Log("No winner Found game continues");
-            GameManager.Instance.currentTurnState =
-                (player == 1) ? TurnState.OTurn : TurnState.XTurn;
+            TurnState nextTurn = (player == 1) ? TurnState.OTurn : TurnState.XTurn;
+            currentTurnState = nextTurn;
+            UpdateTurnStateClientRpc(nextTurn);
         }
+    }
+
+    /// <summary>
+    /// Update state to all client
+    /// </summary>
+    /// <remarks>
+    /// When we change state is just update locally
+    /// So we need to update to all client also
+    /// </remarks>
+    /// <param name="newState">Stored state that has changed</param>
+    [ClientRpc]
+    private void UpdateTurnStateClientRpc(TurnState newState)
+    {
+        currentTurnState = newState;
+    }
+
+    public bool IsMyTurn()
+    {
+        // if is host only host play
+        // else only client play 
+        return (currentTurnState == TurnState.XTurn && IsServer) ||
+               (currentTurnState == TurnState.OTurn && !IsServer); 
     }
     #endregion
 
-    #region Win Condtion
+    #region Win Condition
 
     /// <summary>
     /// Logic to check if there is a winner.
@@ -90,14 +114,15 @@ public class GameManager : Singleton<GameManager>
 
 
     /// <summary>
-    ///  Count the consecutive cells in specific direction form the postion (row, column)
+    ///  Count the consecutive cells in specific direction form the position (row, column)
     /// </summary>
     /// <param name="row">Start Row</param>
     /// <param name="column">Start Column</param>
-    /// <param name="directionRow">Step Beloning to Row (eg 1,-1,0)</param>
-    /// <param name="directionColumn">Step Beloning to Column (eg 1,-1,0)</param>
+    /// <param name="directionRow">Step Belonging to Row (eg 1,-1,0)</param>
+    /// <param name="directionColumn">Step Belonging to Column (eg 1,-1,0)</param>
     /// <param name="player">1 for X and 2 for O</param>
-    /// <returns>Consecutive cells that found</returns>                                                                                                                                                                 
+    /// <returns>Consecutive cells that found 
+    /// <returns>                                                                                                                                                                 
     private int CountDirection(int row, int column, int directionRow, int directionColumn, int player)
     {
         Debug.Log("Is Counting direction");
@@ -111,7 +136,7 @@ public class GameManager : Singleton<GameManager>
             if (newRow < 0 || newRow >= BoardManager.Instance.boardSize || newColumn < 0 || newColumn >= BoardManager.Instance.boardSize)
                 break; // Out of bounds check
 
-            // Check if the cells at (newRow, newColumn) is beloning to Player 1 or 2
+            // Check if the cells at (newRow, newColumn) is belonging to Player 1 or 2
             // Eg: (!,2) currentPlayer == 1 -> count = 1 for Player 1 at cell (1,2) 
             if (BoardManager.Instance.boardSpaces[newRow, newColumn] == player)
                 count++;

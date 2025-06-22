@@ -26,7 +26,7 @@ public class Cell : MonoBehaviour
     }
 
     public void OnClick()
-    {
+    {         
         if (BoardManager.Instance != null && GameManager.Instance.IsMyTurn())
         {
             BoardManager.Instance.SetPlayerSpace(row, column);
@@ -39,5 +39,11 @@ public class Cell : MonoBehaviour
         button.image.sprite = sprite;
         button.image.enabled = true;
         button.interactable = false; // Disable the button after setting the sprite
+    }
+
+    public void ResetCell()
+    {
+        button.interactable = true;
+        button.image.sprite = null;
     }
 }

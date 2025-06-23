@@ -311,6 +311,8 @@ public class GameLobbyManager : Singleton<GameLobbyManager>
                     kickButton.onClick.RemoveAllListeners(); // prevent click multiple time
                     kickButton.onClick.AddListener(() => KickPlayer(player.Id));
                     kickButton.gameObject.SetActive(true);
+                    // And only can Start Game
+                    startGameBtn.gameObject.SetActive(true);
                 }
             }
         }

@@ -1,6 +1,9 @@
 using System;
 using Unity.Netcode;
+using Unity.Services.Authentication;
+using Unity.Services.Lobbies;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 
 public enum TurnState
@@ -26,8 +29,7 @@ public class GameManager : SingletonNetwork<GameManager>
     }
     #endregion
 
-    #region Game Flow
-
+    #region Turn Process
     /// <summary>
     /// Checking which player Turn
     /// </summary>
@@ -79,6 +81,16 @@ public class GameManager : SingletonNetwork<GameManager>
         currentTurnState = newState;
     }
 
+    public bool IsMyTurn()
+    {
+        // if is host only host play
+        // else only client play 
+        return (currentTurnState == TurnState.XTurn && IsServer) ||
+               (currentTurnState == TurnState.OTurn && !IsServer);
+    }
+    #endregion
+
+    #region Game Over
     [ClientRpc]
     private void AnnounceWinnerClientRpc(int winnerPlayerId)
     {
@@ -106,7 +118,9 @@ public class GameManager : SingletonNetwork<GameManager>
         resultText = "Tie";
         GameOverUI.Instance.ShowGameOver(resultText, Color.yellow);
     }
+    #endregion
 
+    #region Rematch
     /// <summary>
     /// This is call when player click rematch button
     /// </summary>
@@ -171,13 +185,53 @@ public class GameManager : SingletonNetwork<GameManager>
 
         GameOverUI.Instance.Hide();
     }
+    #endregion
 
-    public bool IsMyTurn()
+    #region Exit Game
+    public async void ExitGame()
     {
-        // if is host only host play
-        // else only client play 
-        return (currentTurnState == TurnState.XTurn && IsServer) ||
-               (currentTurnState == TurnState.OTurn && !IsServer);
+        if (GameLobbyManager.Instance != null && GameLobbyManager.Instance.currentRoom != null)
+        {
+            try
+            {
+                var roomID = GameLobbyManager.Instance.currentRoom.Id;
+                var myPlayerId = AuthenticationService.Instance.PlayerId;
+
+                // if host leave Room...
+                if (GameLobbyManager.Instance.CheckIfHost())
+                {
+                    if (GameLobbyManager.Instance.currentRoom.Players.Count > 1)
+                    {
+                        string nextHost = GameLobbyManager.Instance.GetNextHostId();
+                        if (!string.IsNullOrEmpty(nextHost))
+                        {
+                            // ... change host
+                            await LobbyService.Instance.UpdateLobbyAsync(roomID, new UpdateLobbyOptions { HostId = nextHost });
+                        }
+                    }
+                    else
+                    {  
+                        // If nobody in room and host leave room, so destroy the room also 
+                        await LobbyService.Instance.DeleteLobbyAsync(roomID);
+                    }
+                }
+                // else client 
+                await LobbyService.Instance.RemovePlayerAsync(roomID, myPlayerId);
+            }
+            catch (LobbyServiceException e)
+            {
+                Debug.Log(e);
+            }
+        }
+
+        // Disconnect internet, and relay
+        if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer)
+        {
+            Debug.Log($"Player has disconnected from NetCode and Relay. IsClient: {NetworkManager.Singleton.IsClient}, IsServer: {NetworkManager.Singleton.IsServer}");
+            NetworkManager.Singleton.Shutdown();
+        }
+
+        SceneManager.LoadScene("Main Menu");
     }
     #endregion
 

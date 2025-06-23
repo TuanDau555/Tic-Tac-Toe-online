@@ -5,10 +5,10 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Lobbies;
 using Unity.Services.Authentication;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine.SceneManagement;
+using Unity.Netcode;
 
-public class GameLobbyManager : MonoBehaviour
+public class GameLobbyManager : Singleton<GameLobbyManager>
 {
     #region Variables
     [Header("Lobby Panel")]
@@ -36,7 +36,7 @@ public class GameLobbyManager : MonoBehaviour
 
     private CreateLobbyOptions createOptions;
     private JoinLobbyByIdOptions joinOptions;
-    private Lobby currentRoom;
+    [HideInInspector] public Lobby currentRoom;
     private float heartbeatTimer = 15f;
     private float roomUpdateTimer = 2.5f;
     private string roomName;
@@ -53,22 +53,23 @@ public class GameLobbyManager : MonoBehaviour
     void Update()
     {
         HandleRoomHeartbeat();
-        HandleRoomUpadate();
+        HandleRoomUpdate();
     }
 
     void OnEnable()
     {
         createRoomBtn.onClick.AddListener(CreateRoom);
         refreshLobbiesBtn.onClick.AddListener(ListOfRooms);
+        startGameBtn.onClick.AddListener(StartGame);
         leaveRoomBtn.onClick.AddListener(LeaveRoom);
-        
     }
     void OnDisable()
     {
         // Prevent multiple click
         createRoomBtn.onClick.RemoveAllListeners();
         refreshLobbiesBtn.onClick.RemoveAllListeners();
-        leaveRoomBtn.onClick.RemoveAllListeners();        
+        startGameBtn.onClick.RemoveAllListeners();
+        leaveRoomBtn.onClick.RemoveAllListeners();
     }
 
     #endregion
@@ -91,7 +92,7 @@ public class GameLobbyManager : MonoBehaviour
             EnterRoom();
             // After we create Room we want to create an allocation also...
             // ...So that the player could join on difference computer, wifi, etc. 
-            //string relayCode = await GameRelayManager.Instance.CreateRelay();
+            string relayCode = await GameRelayManager.Instance.CreateRelay();
             Debug.Log("Lobby created: " + currentRoom.Name + " with ID: " + currentRoom.Id + " and Max Players: " + currentRoom.MaxPlayers);
         }
         // Handle the case where the lobby creation fails
@@ -107,10 +108,10 @@ public class GameLobbyManager : MonoBehaviour
     {
         roomNameText.text = currentRoom.Name;
         roomCodeText.text = currentRoom.LobbyCode;
-        
+
         lobbyPanel.SetActive(false);
         roomPanel.SetActive(true);
-        
+
 
         VisualizePlayerInRoom();
     }
@@ -140,10 +141,10 @@ public class GameLobbyManager : MonoBehaviour
             JoinLobbyByIDOptions();
             currentRoom = await LobbyService.Instance.JoinLobbyByIdAsync(roomID, joinOptions);
             EnterRoom();
-            // if (!IsHost()) // Room Host already join Relay
-            // {
-            //     GameRelayManager.Instance.JoinRelay(createOptions.Data["IsGameStarted"].Value);
-            // }
+            if (!CheckIfHost()) // Room Host already join Relay
+            {
+                GameRelayManager.Instance.JoinRelay(createOptions.Data["IsGameStarted"].Value);
+            }
             Debug.Log("Player in the room: " + currentRoom.Players.Count);
         }
         catch (LobbyServiceException e)
@@ -153,13 +154,17 @@ public class GameLobbyManager : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// This function is called when play click "Leave Room" 
+    /// </summary>
+    /// <returns></returns>
     private async void LeaveRoom()
     {
         try
         {
             // If the player is the host, we need to find the next host before leaving the room
             // If the player is not the host, we can leave the room directly
-            if (IsHost() && currentRoom.Players.Count > 1)
+            if (CheckIfHost() && currentRoom.Players.Count > 1)
             {
                 string nextHostId = GetNextHostId();
                 if (string.IsNullOrEmpty(nextHostId))
@@ -175,6 +180,13 @@ public class GameLobbyManager : MonoBehaviour
 
             // Remove the player from the room
             await LobbyService.Instance.RemovePlayerAsync(currentRoom.Id, AuthenticationService.Instance.PlayerId);
+        
+            // Disconnect internet, and relay
+            if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+
             ExitRoom();
         }
         catch (LobbyServiceException e)
@@ -187,7 +199,7 @@ public class GameLobbyManager : MonoBehaviour
     {
         try
         {
-            if (IsHost())
+            if (CheckIfHost())
             {
                 await LobbyService.Instance.RemovePlayerAsync(currentRoom.Id, playerId);
                 Debug.Log("Player with ID: " + playerId + " has been kicked from the room.");
@@ -200,10 +212,10 @@ public class GameLobbyManager : MonoBehaviour
     }
 
     // When the host click Start Button 
-    // We need to upate the value of the data to true...
+    // We need to update the value of the data to true...
     private async void StartGame()
     {
-        if (currentRoom != null && IsHost())
+        if (currentRoom != null && CheckIfHost())
         {
             try
             {
@@ -217,7 +229,7 @@ public class GameLobbyManager : MonoBehaviour
                 // ...and update the current room
                 currentRoom = await LobbyService.Instance.UpdateLobbyAsync(currentRoom.Id, updateLobbyOptions);
                 // Then both go to the game
-                //SceneManager.LoadSceneAsync();
+                SceneManager.LoadSceneAsync("GameScene");
             }
             catch (LobbyServiceException e)
             {
@@ -260,7 +272,7 @@ public class GameLobbyManager : MonoBehaviour
             roomDetailsText[0].text = room.Name;
             roomDetailsText[1].text = (room.MaxPlayers - room.AvailableSlots).ToString() + " / " + room.MaxPlayers.ToString();
 
-            // ưhen the player clicks on the room info, it will join the room
+            // when the player clicks on the room info, it will join the room
             // We use the room ID to join the room
             newRoomInfo.GetComponentInChildren<Button>().onClick.RemoveAllListeners();
             newRoomInfo.GetComponentInChildren<Button>().onClick.AddListener(() => JoinRoom(room.Id));
@@ -289,7 +301,7 @@ public class GameLobbyManager : MonoBehaviour
                 // ...and set the player details text (name)
                 playerDetailsText.text = player.Data["Name"].Value;
 
-                if (IsHost() && player.Id != AuthenticationService.Instance.PlayerId)
+                if (CheckIfHost() && player.Id != AuthenticationService.Instance.PlayerId)
                 {
                     // If the player is the host, we add a kick button to the player info UI element
                     // This is to allow the host to kick other players from the room
@@ -365,12 +377,12 @@ public class GameLobbyManager : MonoBehaviour
             Player = GetPlayerInfo()
         };
     }
-    
+
     // Only the host can send heartbeats to keep the lobby alive
-    // If the client is sent heartbeats, it will cause an error (increseased bandwidth cost)
+    // If the client is sent heartbeats, it will cause an error (increased bandwidth cost)
     private async void HandleRoomHeartbeat()
     {
-        if (currentRoom != null && IsHost())
+        if (currentRoom != null && CheckIfHost())
         {
             heartbeatTimer -= Time.deltaTime;
             if (heartbeatTimer <= 0f)
@@ -389,7 +401,7 @@ public class GameLobbyManager : MonoBehaviour
     }
 
     // This method is used to update the room information periodically
-    private async void HandleRoomUpadate()
+    private async void HandleRoomUpdate()
     {
         if (currentRoom != null)
         {
@@ -431,7 +443,7 @@ public class GameLobbyManager : MonoBehaviour
         return false; // Player is not in the room
     }
 
-    private string GetNextHostId()
+    public string GetNextHostId()
     {
         // If the current host leaves the room, we need to find the next host
         // We can do this by checking the player list and returning the first player that is not the current host
@@ -446,7 +458,7 @@ public class GameLobbyManager : MonoBehaviour
     }
 
     // Only the host can perform certain actions like sending heartbeats
-    private bool IsHost()
+    public bool CheckIfHost()
     {
         if (currentRoom != null && currentRoom.HostId == AuthenticationService.Instance.PlayerId)
         {

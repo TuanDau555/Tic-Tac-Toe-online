@@ -228,8 +228,9 @@ public class GameLobbyManager : Singleton<GameLobbyManager>
                 };
                 // ...and update the current room
                 currentRoom = await LobbyService.Instance.UpdateLobbyAsync(currentRoom.Id, updateLobbyOptions);
+
                 // Then both go to the game
-                SceneManager.LoadSceneAsync("GameScene");
+                NetworkManager.Singleton.SceneManager.LoadScene("GameScene", LoadSceneMode.Single);
             }
             catch (LobbyServiceException e)
             {

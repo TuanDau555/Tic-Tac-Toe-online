@@ -1,0 +1,6 @@
+# Priority to display C# in GitHub language statistics.
+
+# Mark all ShaderLab and HLSL files as 'vendored' so that GitHub Linguist ignores them when counting languages.
+*.shader linguist-vendored
+*.hlsl linguist-vendored
+*.cginc linguist-vendored
